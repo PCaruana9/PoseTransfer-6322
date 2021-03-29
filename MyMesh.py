@@ -22,3 +22,7 @@ def bbox(mesh):
 
 def getFaces(mesh):
   return mesh.cells[0][1]
+
+def saveMesh(fname, points, faces):
+  cells = [("triangle", faces)]
+  meshio.Mesh(points, cells).write(fname)
