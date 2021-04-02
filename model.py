@@ -22,14 +22,19 @@ import numpy as np
 BOTTLENECK_SIZE = 1024
 POINTS = 6890  # number of points in models from SMPL
 
-class PoseFeatureExtractor(nn.Module):
+
+class NeuralPoseTransfer(nn.Module):
 
     def __init__(self):
-        super(PoseFeatureExtractor, self).__init__()
+        super(NeuralPoseTransfer, self).__init__()
+        self.encoder = Encoder()
+        self.decoder = Decoder(BOTTLENECK_SIZE + 3)  # +3 for the xyz coordinates of the identity mesh
 
+    def forward(self, pose, identity):
+        x = self.encoder(pose, identity)
+        out = self.decoder(x, identity)
 
-    def forward(self, x):
-        pass
+        return out.transpose(2, 1)
 
 class Encoder(nn.Module):
 
@@ -70,23 +75,64 @@ class Decoder(nn.Module):
         out = torch.nn.functional.tanh(x1)
         return out
 
+class PoseFeatureExtractor(nn.Module):
 
+    def __init__(self):
+        super(PoseFeatureExtractor, self).__init__()
+        self.c1 = torch.nn.functional.conv1d()
+        self.c2 = torch.nn.functional.conv1d()
+        self.c3 = torch.nn.functional.conv1d()
+        self.norm1 = torch.norm() #instance norms
+        self.norm2 = torch.norm()
+        self.norm3 = torch.norm()
+
+    def forward(self, x):
+        x1 = self.c1(x)
+        x1 = self.norm1(x1)
+        x1 = self.c2(x1)
+        x1 = self.norm2(x1)
+        x1 = self.c3(x1)
+        out = self.norm4(x1)
+        return out
 
 class SPAdaIN(nn.Module):
 
     def __init__(self, I_norm):
         super(SPAdaIN, self).__init__()
+        self.norm = torch.norm()
+        self.c_x = torch.nn.functional.conv1d() # X
+        self.c_p = torch.nn.functional.conv1d() # +
 
-    def forward(self, x):
-        pass
+    def forward(self, x, identity):
+        instNorm = self.norm(x)
+        beta = self.c_p(identity)
+        gamma = self.c_x(identity)
+        out = (gamma * instNorm) + beta
+        return out
+
+
 
 class SPAdaIN_ResBlock(nn.Module):
 
     def __init__(self):
         super(SPAdaIN_ResBlock, self).__init__()
+        self.SPA_1 = SPAdaIN()
+        self.SPA_2 = SPAdaIN()
+        self.SPA_3 = SPAdaIN()
+        self.c1 = torch.nn.functional.conv1d()
+        self.c2 = torch.nn.functional.conv1d()
+        self.c3 = torch.nn.functional.conv1d()
 
     def forward(self, x, identity):
-        pass
+        left = self.SPA_1(x, identity)
+        left = self.c1(left)
+        left = self.SPA_2(left, identity)
+        left = self.c2(left)
+        right = self.SPA_3(x, identity)
+        right = self.c3(right)
+
+        out = left + right
+        return out
 
 # Instance Norm
 class SPAdaBIN(nn.Module):
@@ -106,16 +152,3 @@ class SPAdaBIN_ResBlock(nn.Module):
     def forward(self, x):
         pass
 
-class NeuralPoseTransfer(nn.Module):
-
-    def __init__(self):
-        super(NeuralPoseTransfer, self).__init__()
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-
-
-    def forward(self, pose, identity):
-        x = self.encoder(pose, identity)
-        out = self.decoder(x, identity)
-        
-        return out.transpose(2,1)
