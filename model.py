@@ -51,10 +51,10 @@ class Decoder(nn.Module):
 
     def __init__(self, bottleneck_size, norm_type='Instance'):
         super(Decoder, self).__init__()
-        self.c1 = nn.functional.conv1d(bottleneck_size, bottleneck_size, 1)
-        self.c2 = nn.functional.conv1d(bottleneck_size, bottleneck_size//2, 1)
-        self.c3 = nn.functional.conv1d(bottleneck_size, bottleneck_size//4, 1)
-        self.c4 = nn.functional.conv1d(bottleneck_size//4, 3, 1)
+        self.c1 = nn.conv1d(bottleneck_size, bottleneck_size, 1)
+        self.c2 = nn.conv1d(bottleneck_size, bottleneck_size//2, 1)
+        self.c3 = nn.conv1d(bottleneck_size, bottleneck_size//4, 1)
+        self.c4 = nn.conv1d(bottleneck_size//4, 3, 1)
         if norm_type == 'Batch':
             self.SPA_res1 = SPAdaBIN_ResBlock()
             self.SPA_res2 = SPAdaBIN_ResBlock()
@@ -79,12 +79,12 @@ class PoseFeatureExtractor(nn.Module):
 
     def __init__(self):
         super(PoseFeatureExtractor, self).__init__()
-        self.c1 = torch.nn.functional.conv1d()
-        self.c2 = torch.nn.functional.conv1d()
-        self.c3 = torch.nn.functional.conv1d()
-        self.norm1 = torch.norm() #instance norms
-        self.norm2 = torch.norm()
-        self.norm3 = torch.norm()
+        self.c1 = torch.nn.Conv1d(3, 64, 1)
+        self.c2 = nn.functional.instance_(64, 128, 1)
+        self.c3 = nn.functional.instance_(128, 1024, 1)
+        self.norm1 = torch.nn.InstanceNorm1d() # instance norms
+        self.norm2 = torch.nn.InstanceNorm1d()
+        self.norm3 = torch.nn.InstanceNorm1d()
 
     def forward(self, x):
         x1 = self.c1(x)
@@ -99,9 +99,10 @@ class SPAdaIN(nn.Module):
 
     def __init__(self, I_norm):
         super(SPAdaIN, self).__init__()
-        self.norm = torch.norm()
-        self.c_x = torch.nn.functional.conv1d() # X
-        self.c_p = torch.nn.functional.conv1d() # +
+        self.norm = torch.nn.InstanceNorm1d()()
+        torch.nn.Conv
+        self.c_x = torch.nn.Conv1d() # X
+        self.c_p = torch.nn.Conv1d() # +
 
     def forward(self, x, identity):
         instNorm = self.norm(x)
@@ -119,9 +120,9 @@ class SPAdaIN_ResBlock(nn.Module):
         self.SPA_1 = SPAdaIN()
         self.SPA_2 = SPAdaIN()
         self.SPA_3 = SPAdaIN()
-        self.c1 = torch.nn.functional.conv1d()
-        self.c2 = torch.nn.functional.conv1d()
-        self.c3 = torch.nn.functional.conv1d()
+        self.c1 = torch.nn.Conv1d()
+        self.c2 = torch.nn.Conv1d()
+        self.c3 = torch.nn.Conv1d()
 
     def forward(self, x, identity):
         left = self.SPA_1(x, identity)
