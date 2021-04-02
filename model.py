@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as tfun
+import torch.nn.functional as F
 import numpy as np
 
 # Peter Caruana
@@ -36,6 +36,7 @@ class NeuralPoseTransfer(nn.Module):
 
         return out.transpose(2, 1)
 
+
 class Encoder(nn.Module):
 
     def __init__(self):
@@ -47,22 +48,28 @@ class Encoder(nn.Module):
         cat = torch.cat((x_pfe, identity), 1)
         return cat
 
+
 class Decoder(nn.Module):
 
-    def __init__(self, bottleneck_size, norm_type='Instance'):
+    def __init__(self, norm_type='Instance'):
         super(Decoder, self).__init__()
-        self.c1 = nn.conv1d(bottleneck_size, bottleneck_size, 1)
-        self.c2 = nn.conv1d(bottleneck_size, bottleneck_size//2, 1)
-        self.c3 = nn.conv1d(bottleneck_size, bottleneck_size//4, 1)
-        self.c4 = nn.conv1d(bottleneck_size//4, 3, 1)
+
+        Small = BOTTLENECK_SIZE // 4
+        Medium = BOTTLENECK_SIZE // 2
+        Large = BOTTLENECK_SIZE
+
+        self.c1 = nn.conv1d(Large, Large, 1)
+        self.c2 = nn.conv1d(Large, Medium, 1)
+        self.c3 = nn.conv1d(Medium, Small, 1)
+        self.c4 = nn.conv1d(Small, 3, 1)
         if norm_type == 'Batch':
-            self.SPA_res1 = SPAdaBIN_ResBlock()
-            self.SPA_res2 = SPAdaBIN_ResBlock()
-            self.SPA_res3 = SPAdaBIN_ResBlock()
-        else: #instance
-            self.SPA_res1 = SPAdaIN_ResBlock()
-            self.SPA_res2 = SPAdaIN_ResBlock()
-            self.SPA_res3 = SPAdaIN_ResBlock()
+            self.SPA_res1 = SPAdaBIN_ResBlock(Large)
+            self.SPA_res2 = SPAdaBIN_ResBlock(Medium)
+            self.SPA_res3 = SPAdaBIN_ResBlock(Small)
+        else:  # instance
+            self.SPA_res1 = SPAdaIN_ResBlock(Large)
+            self.SPA_res2 = SPAdaIN_ResBlock(Medium)
+            self.SPA_res3 = SPAdaIN_ResBlock(Small)
 
     def forward(self, x, identity):
         x1 = self.c1(x)
@@ -75,81 +82,109 @@ class Decoder(nn.Module):
         out = torch.nn.functional.tanh(x1)
         return out
 
+
 class PoseFeatureExtractor(nn.Module):
 
     def __init__(self):
         super(PoseFeatureExtractor, self).__init__()
-        self.c1 = torch.nn.Conv1d(3, 64, 1)
-        self.c2 = nn.functional.instance_(64, 128, 1)
-        self.c3 = nn.functional.instance_(128, 1024, 1)
-        self.norm1 = torch.nn.InstanceNorm1d() # instance norms
-        self.norm2 = torch.nn.InstanceNorm1d()
-        self.norm3 = torch.nn.InstanceNorm1d()
+        S = BOTTLENECK_SIZE // 16  # Small
+        M = BOTTLENECK_SIZE // 8  # Medium
+        L = BOTTLENECK_SIZE  # Large
+
+        self.c1 = torch.nn.Conv1d(3, S, 1)  # our points have 3 channels (x,y,z). Scaling is taken from PointNet setup
+        self.c2 = nn.functional.instance_(S, M, 1)
+        self.c3 = nn.functional.instance_(M, L, 1)
+
+        self.norm1 = torch.nn.InstanceNorm1d(S)
+        self.norm2 = torch.nn.InstanceNorm1d(M)
+        self.norm3 = torch.nn.InstanceNorm1d(L)
 
     def forward(self, x):
-        x1 = self.c1(x)
-        x1 = self.norm1(x1)
-        x1 = self.c2(x1)
-        x1 = self.norm2(x1)
-        x1 = self.c3(x1)
-        out = self.norm4(x1)
-        return out
+        layer1 = F.relu(self.norm1(self.c1(x)))
+        layer2 = F.relu(self.norm2(self.c2(layer1)))
+        layer3 = F.relu(self.norm3(self.c3(layer2)))
+        return layer3
+
 
 class SPAdaIN(nn.Module):
 
-    def __init__(self, I_norm):
+    def __init__(self, bottleneck):
         super(SPAdaIN, self).__init__()
-        self.norm = torch.nn.InstanceNorm1d()()
-        torch.nn.Conv
-        self.c_x = torch.nn.Conv1d() # X
-        self.c_p = torch.nn.Conv1d() # +
+        self.norm = torch.nn.InstanceNorm1d(bottleneck)
+        #  Identity will have 3 channels
+        self.c_g = torch.nn.Conv1d(3, bottleneck, 1)
+        self.c_b = torch.nn.Conv1d(3, bottleneck, 1)
 
     def forward(self, x, identity):
         instNorm = self.norm(x)
-        beta = self.c_p(identity)
-        gamma = self.c_x(identity)
+        beta = self.c_b(identity)
+        gamma = self.c_g(identity)
         out = (gamma * instNorm) + beta
         return out
 
 
-
 class SPAdaIN_ResBlock(nn.Module):
 
-    def __init__(self):
+    #  iden_chan -> Number of channels in the identity, i.e. 3 (x,y,z)
+    def __init__(self, bottleneck):
         super(SPAdaIN_ResBlock, self).__init__()
-        self.SPA_1 = SPAdaIN()
-        self.SPA_2 = SPAdaIN()
-        self.SPA_3 = SPAdaIN()
-        self.c1 = torch.nn.Conv1d()
-        self.c2 = torch.nn.Conv1d()
-        self.c3 = torch.nn.Conv1d()
+        self.SPA_1 = SPAdaIN(bottleneck)
+        self.SPA_2 = SPAdaIN(bottleneck)
+        self.SPA_3 = SPAdaIN(bottleneck)
+        self.c1 = torch.nn.Conv1d(bottleneck, bottleneck, 1)
+        self.c2 = torch.nn.Conv1d(bottleneck, bottleneck, 1)
+        self.c3 = torch.nn.Conv1d(bottleneck, bottleneck, 1)
 
     def forward(self, x, identity):
         left = self.SPA_1(x, identity)
-        left = self.c1(left)
+        left = F.relu(self.c1(left))
         left = self.SPA_2(left, identity)
-        left = self.c2(left)
+        left = F.relu(self.c2(left))
         right = self.SPA_3(x, identity)
-        right = self.c3(right)
+        right = F.relu(self.c3(right))
 
         out = left + right
         return out
 
+
 # Instance Norm
 class SPAdaBIN(nn.Module):
 
-    def __init__(self, BI_norm):
+    def __init__(self, bottleneck):
         super(SPAdaBIN, self).__init__()
+        self.norm = torch.nn.InstanceNorm1d(bottleneck)
+        #  Identity will have 3 channels
+        self.c_g = torch.nn.Conv1d(3, bottleneck, 1)
+        self.c_b = torch.nn.Conv1d(3, bottleneck, 1)
 
     def forward(self, x, identity):
-        pass
+        instNorm = self.norm(x)
+        beta = self.c_b(identity)
+        gamma = self.c_g(identity)
+        out = (gamma * instNorm) + beta
+        return out
+
 
 # Batch-instance norm
 class SPAdaBIN_ResBlock(nn.Module):
 
-    def __init__(self):
-       super(SPAdaBIN_ResBlock, self).__init__()
+    def __init__(self, bottleneck):
+        super(SPAdaBIN_ResBlock, self).__init__()
+        self.SPA_1 = SPAdaIN(bottleneck)
+        self.SPA_2 = SPAdaIN(bottleneck)
+        self.SPA_3 = SPAdaIN(bottleneck)
+        self.c1 = torch.nn.Conv1d(bottleneck, bottleneck, 1)
+        self.c2 = torch.nn.Conv1d(bottleneck, bottleneck, 1)
+        self.c3 = torch.nn.Conv1d(bottleneck, bottleneck, 1)
 
-    def forward(self, x):
-        pass
+    def forward(self, x, identity):
+        left = self.SPA_1(x, identity)
+        left = F.relu(self.c1(left))
+        left = self.SPA_2(left, identity)
+        left = F.relu(self.c2(left))
+        right = self.SPA_3(x, identity)
+        right = F.relu(self.c3(right))
+        
+        out = left + right
 
+        return out
