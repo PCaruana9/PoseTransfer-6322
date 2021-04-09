@@ -92,8 +92,8 @@ class PoseFeatureExtractor(nn.Module):
         L = BOTTLENECK_SIZE  # Large
 
         self.c1 = torch.nn.Conv1d(3, S, 1)  # our points have 3 channels (x,y,z). Scaling is taken from PointNet setup
-        self.c2 = nn.functional.instance_(S, M, 1)
-        self.c3 = nn.functional.instance_(M, L, 1)
+        self.c2 = torch.nn.Conv1d(S, M, 1)
+        self.c3 = torch.nn.Conv1d(M, L, 1)
 
         self.norm1 = torch.nn.InstanceNorm1d(S)
         self.norm2 = torch.nn.InstanceNorm1d(M)
