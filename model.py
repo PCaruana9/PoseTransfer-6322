@@ -8,8 +8,8 @@ import numpy as np
 # EECS 6322, Winter 2021
 # caruana9@my.yorku.ca
 
-# implementations of the SPatially Adaptive Instance Normalization
-# and SPatially Adaptive Batch Instance Normalization
+# implementations of the SPatially Adaptive Instance Normalization (SPAdaIN)
+# and SPatially Adaptive Batch Instance Normalization (SPAdaBIN)
 
 # HELP NOTES:
 #
@@ -28,7 +28,7 @@ class NeuralPoseTransfer(nn.Module):
     def __init__(self):
         super(NeuralPoseTransfer, self).__init__()
         self.encoder = Encoder()
-        self.decoder = Decoder(BOTTLENECK_SIZE + 3)  # +3 for the xyz coordinates of the identity mesh
+        self.decoder = Decoder(BOTTLENECK_SIZE + 3)  # + 3 for the xyz coordinates of the identity mesh
 
     def forward(self, pose, identity):
         x = self.encoder(pose, identity)
@@ -184,7 +184,7 @@ class SPAdaBIN_ResBlock(nn.Module):
         left = F.relu(self.c2(left))
         right = self.SPA_3(x, identity)
         right = F.relu(self.c3(right))
-        
+
         out = left + right
 
         return out
