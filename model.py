@@ -58,10 +58,10 @@ class Decoder(nn.Module):
         Medium = BOTTLENECK_SIZE // 2
         Large = BOTTLENECK_SIZE
 
-        self.c1 = nn.conv1d(Large, Large, 1)
-        self.c2 = nn.conv1d(Large, Medium, 1)
-        self.c3 = nn.conv1d(Medium, Small, 1)
-        self.c4 = nn.conv1d(Small, 3, 1)
+        self.c1 = nn.Conv1d(Large, Large, 1)
+        self.c2 = nn.Conv1d(Large, Medium, 1)
+        self.c3 = nn.Conv1d(Medium, Small, 1)
+        self.c4 = nn.Conv1d(Small, 3, 1)
         if norm_type == 'Batch':
             self.SPA_res1 = SPAdaBIN_ResBlock(Large)
             self.SPA_res2 = SPAdaBIN_ResBlock(Medium)
