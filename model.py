@@ -27,10 +27,10 @@ POINTS = 6890  # number of points in models from SMPL
 
 class NeuralPoseTransfer(nn.Module):
 
-    def __init__(self):
+    def __init__(self, norm_type='Instance'):
         super(NeuralPoseTransfer, self).__init__()
         self.encoder = Encoder()
-        self.decoder = Decoder(BOTTLENECK_SIZE + 3)  # + 3 for the xyz coordinates of the identity mesh
+        self.decoder = Decoder(BOTTLENECK_SIZE + 3, norm_type=norm_type)  # + 3 for the xyz coordinates of the identity mesh
 
     def forward(self, pose, identity):
         x = self.encoder(pose, identity)
@@ -53,12 +53,12 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self, norm_type='Instance'):
+    def __init__(self, bottleneck_size, norm_type='Instance'):
         super(Decoder, self).__init__()
 
-        Small = BOTTLENECK_SIZE // 4
-        Medium = BOTTLENECK_SIZE // 2
-        Large = BOTTLENECK_SIZE
+        Small = bottleneck_size // 4
+        Medium = bottleneck_size // 2
+        Large = bottleneck_size
 
         self.c1 = nn.Conv1d(Large, Large, 1)
         self.c2 = nn.Conv1d(Large, Medium, 1)
